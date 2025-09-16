@@ -10,14 +10,11 @@ add_subdirectory(DiligentEngine)
 # Create the executable
 add_executable(ForgedFlight
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/ForgedFlightApp.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/ForgedFlightApp.h
 )
 
 # Link against Diligent Engine
 target_link_libraries(ForgedFlight
     PRIVATE
-    Diligent-NativeApp
     Diligent-TextureLoader
     Diligent-ImGui
 )
