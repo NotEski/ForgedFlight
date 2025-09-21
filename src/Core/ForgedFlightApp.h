@@ -72,7 +72,6 @@ private:
     void RenderVoxelWorld();
     
     // Debug UI
-    void ShowCameraDebugConsole();
     void InitializeImGui();
     void RenderImGuiDebugWindow();
 

@@ -709,48 +709,6 @@ void ForgedFlightApp::OnMouseWheel(int delta)
     }
 }
 
-void ForgedFlightApp::ShowCameraDebugConsole()
-{
-    static int frameCount = 0;
-    frameCount++;
-    
-    // Print debug info every 30 frames (twice per second) to see it more often
-    if (frameCount % 30 != 0 || !m_pCamera)
-        return;
-        
-    std::cout << "\n=== CAMERA DEBUG INFO (Frame " << frameCount << ") ===" << std::endl;
-    
-    // Camera position
-    float3 position = m_pCamera->GetPosition();
-    std::cout << "Position: (" << position.x << ", " << position.y << ", " << position.z << ")" << std::endl;
-    
-    // Camera rotation (pitch, yaw)
-    float pitch = m_pCamera->GetPitch();
-    float yaw = m_pCamera->GetYaw();
-    std::cout << "Rotation: Pitch=" << pitch << "°, Yaw=" << yaw << "°" << std::endl;
-    
-    // Camera direction vector
-    float3 forward = m_pCamera->GetForwardVector();
-    std::cout << "Forward: (" << forward.x << ", " << forward.y << ", " << forward.z << ")" << std::endl;
-    
-    // Movement speed
-    float speed = m_pCamera->GetMovementSpeed();
-    std::cout << "Movement Speed: " << speed << std::endl;
-    
-    // Projection parameters
-    float fov = m_pCamera->GetFOV();
-    float aspectRatio = m_pCamera->GetAspectRatio();
-    float nearPlane = m_pCamera->GetNearPlane();
-    float farPlane = m_pCamera->GetFarPlane();
-    
-    std::cout << "FOV: " << fov << "°" << std::endl;
-    std::cout << "Aspect Ratio: " << aspectRatio << std::endl;
-    std::cout << "Near Plane: " << nearPlane << std::endl;
-    std::cout << "Far Plane: " << farPlane << std::endl;
-    
-    std::cout << "=========================" << std::endl;
-    std::cout.flush(); // Force output to console immediately
-}
 
 void ForgedFlightApp::InitializeImGui()
 {
