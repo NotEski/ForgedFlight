@@ -78,6 +78,9 @@ void Chunk::Generate()
         }
     }
     
+    // Always place a special block at (1,1,1) for UV color demonstration
+    m_Blocks[1][1][1].type = BlockType::Wood;
+    
     m_Dirty = true;
 }
 

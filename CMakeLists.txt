@@ -52,6 +52,7 @@ target_link_libraries(ForgedFlight
     Diligent-TargetPlatform
     Diligent-Common
     Diligent-TextureLoader
+    Diligent-Imgui
     DiligentFX  # Re-enabled for samples and proper integration
 )
 
@@ -70,6 +71,7 @@ target_include_directories(ForgedFlight
     ${CMAKE_CURRENT_SOURCE_DIR}/DiligentEngine/DiligentCore/Platforms/Interface
     ${CMAKE_CURRENT_SOURCE_DIR}/DiligentEngine/DiligentTools
     ${CMAKE_CURRENT_SOURCE_DIR}/DiligentEngine/DiligentTools/TextureLoader/Interface
+    ${CMAKE_CURRENT_SOURCE_DIR}/DiligentEngine/DiligentTools/Imgui/interface
     ${CMAKE_CURRENT_SOURCE_DIR}/DiligentEngine/DiligentFX
     ${CMAKE_CURRENT_SOURCE_DIR}/DiligentEngine/DiligentFX/PBR/interface
     ${CMAKE_CURRENT_SOURCE_DIR}/DiligentEngine/DiligentFX/PostProcess/Common/interface

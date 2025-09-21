@@ -17,6 +17,9 @@
 #include "Graphics/GraphicsEngine/interface/Buffer.h"
 #include "Common/interface/BasicMath.hpp"
 
+// ImGui includes
+#include "ImGui/interface/ImGuiImplDiligent.hpp"
+
 using namespace Diligent;
 
 // Forward declarations for voxel game components
@@ -67,6 +70,11 @@ private:
     void InitializeVoxelWorld();
     void UpdateCamera(double deltaTime);
     void RenderVoxelWorld();
+    
+    // Debug UI
+    void ShowCameraDebugConsole();
+    void InitializeImGui();
+    void RenderImGuiDebugWindow();
 
     // Diligent Engine core objects
     RefCntAutoPtr<IRenderDevice>        m_pDevice;
@@ -77,6 +85,9 @@ private:
     RefCntAutoPtr<IBuffer>              m_pCubeIndexBuffer;
     RefCntAutoPtr<IBuffer>              m_pVSConstants;
     RefCntAutoPtr<IShaderResourceBinding> m_pSRB;
+
+    // ImGui integration
+    std::unique_ptr<ImGuiImplDiligent>  m_pImGuiImpl;
 
     // Voxel game components
     std::unique_ptr<Camera>             m_pCamera;

@@ -4,6 +4,9 @@
 #include "../World/VoxelWorld.h"
 #include "../World/ChunkManager.h"
 
+// ImGui includes
+#include "ThirdParty/imgui/imgui.h"
+
 // Windows includes for console
 #include <windows.h>
 #include <io.h>
@@ -82,6 +85,15 @@ void ForgedFlightApp::Initialize(const NativeAppInitAttrib& InitAttrib)
         // Initialize advanced renderer with DiligentFX features
         m_pAdvancedRenderer = std::make_unique<AdvancedRenderer>();
         m_pAdvancedRenderer->Initialize(m_pDevice, m_pImmediateContext, m_WindowWidth, m_WindowHeight);
+        
+        std::cout << "Advanced renderer initialized" << std::endl;
+        
+        // Initialize ImGui
+        InitializeImGui();
+        
+        std::cout << "ImGui initialized" << std::endl;
+        
+        // Don't initialize ImGui here - do it lazily when first needed
         
         std::cout << "Advanced renderer initialized with DiligentFX features" << std::endl;
         
@@ -203,7 +215,7 @@ void ForgedFlightApp::CreateCubePipelineState()
         }
     )";
 
-    // Pixel shader for voxel cubes
+    // Pixel shader for voxel cubes with UV-based coloring
     const char* PSSource = R"(
         struct PSInput
         {
@@ -224,12 +236,20 @@ void ForgedFlightApp::CreateCubePipelineState()
             float3 lightDir = normalize(float3(0.3, 0.8, 0.5));
             float NdotL = max(dot(PSIn.Normal, lightDir), 0.2);
             
-            // Simple color based on UV coordinates and lighting
-            float3 baseColor = float3(0.4, 0.7, 0.3); // Grass-like color
-            if (PSIn.Normal.y < 0.5) // Side faces
+            // Use UV coordinates as RGB color
+            // UV coordinates range from 0-1, perfect for RGB values
+            float3 baseColor = float3(PSIn.UV.x, PSIn.UV.y, 0.5);
+            
+            // Add some variation based on the normal to distinguish faces
+            if (abs(PSIn.Normal.x) > 0.5) // Left/Right faces
             {
-                baseColor = float3(0.6, 0.4, 0.2); // Dirt-like color
+                baseColor = float3(PSIn.UV.y, 0.5, PSIn.UV.x);
             }
+            else if (abs(PSIn.Normal.z) > 0.5) // Front/Back faces  
+            {
+                baseColor = float3(0.5, PSIn.UV.x, PSIn.UV.y);
+            }
+            // Top/Bottom faces use the original UV mapping
             
             PSOut.Color = float4(baseColor * NdotL, 1.0);
         }
@@ -521,6 +541,11 @@ void ForgedFlightApp::Render()
         m_pAdvancedRenderer->EndFrame();
     }
     
+    std::cout << "Render: About to show camera debug info" << std::endl;
+    
+    // Show camera debug info in ImGui window
+    RenderImGuiDebugWindow();
+    
     std::cout << "Render: Completed" << std::endl;
 }
 
@@ -549,21 +574,71 @@ void ForgedFlightApp::WindowResize(Uint32 Width, Uint32 Height)
         {
             m_pCamera->SetPerspective(45.0f, static_cast<float>(Width) / Height, 0.1f, 1000.0f);
         }
+        
+        // Update ImGui DisplaySize when window resizes
+        if (m_pImGuiImpl)
+        {
+            ImGuiIO& io = ImGui::GetIO();
+            io.DisplaySize.x = static_cast<float>(Width);
+            io.DisplaySize.y = static_cast<float>(Height);
+            std::cout << "Updated ImGui DisplaySize to: " << Width << "x" << Height << std::endl;
+        }
     }
 }
 
 void ForgedFlightApp::OnKeyDown(UINT8 key)
 {
-    m_KeyStates[key] = true;
+    // Forward key down to ImGui first
+    if (m_pImGuiImpl)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        
+        // Handle special keys
+        if (key == VK_CONTROL) io.KeyCtrl = true;
+        if (key == VK_SHIFT) io.KeyShift = true;
+        if (key == VK_MENU) io.KeyAlt = true;
+        if (key == VK_LWIN || key == VK_RWIN) io.KeySuper = true;
+        
+        // Add character input for text fields
+        if (key >= 32 && key < 127)
+        {
+            io.AddInputCharacter(key);
+        }
+    }
+
+    // Only handle camera movement if ImGui doesn't want keyboard input
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.WantCaptureKeyboard)
+        m_KeyStates[key] = true;
 }
 
 void ForgedFlightApp::OnKeyUp(UINT8 key)
 {
+    // Forward key up to ImGui first
+    if (m_pImGuiImpl)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        
+        // Handle special keys
+        if (key == VK_CONTROL) io.KeyCtrl = false;
+        if (key == VK_SHIFT) io.KeyShift = false;
+        if (key == VK_MENU) io.KeyAlt = false;
+        if (key == VK_LWIN || key == VK_RWIN) io.KeySuper = false;
+    }
+
     m_KeyStates[key] = false;
 }
 
 void ForgedFlightApp::OnMouseMove(int x, int y)
 {
+    // Forward mouse move to ImGui first
+    if (m_pImGuiImpl)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        io.MousePos.x = static_cast<float>(x);
+        io.MousePos.y = static_cast<float>(y);
+    }
+
     if (m_FirstMouseMove)
     {
         m_LastMouseX = x;
@@ -578,7 +653,9 @@ void ForgedFlightApp::OnMouseMove(int x, int y)
     m_LastMouseX = x;
     m_LastMouseY = y;
     
-    if (m_MouseButtons[1] && m_pCamera) // Right mouse button
+    // Only handle camera rotation if ImGui doesn't want mouse input
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.WantCaptureMouse && m_MouseButtons[1] && m_pCamera) // Right mouse button
     {
         m_pCamera->Rotate(static_cast<float>(deltaX), static_cast<float>(deltaY));
     }
@@ -586,24 +663,261 @@ void ForgedFlightApp::OnMouseMove(int x, int y)
 
 void ForgedFlightApp::OnMouseDown(int x, int y, UINT button)
 {
-    if (button < 3)
+    // Forward mouse down to ImGui first
+    if (m_pImGuiImpl && button < 3)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        io.MouseDown[button] = true;
+    }
+
+    // Only handle camera mouse input if ImGui doesn't want mouse input
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.WantCaptureMouse && button < 3)
         m_MouseButtons[button] = true;
 }
 
 void ForgedFlightApp::OnMouseUp(int x, int y, UINT button)
 {
+    // Forward mouse up to ImGui first
+    if (m_pImGuiImpl && button < 3)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        io.MouseDown[button] = false;
+    }
+
     if (button < 3)
         m_MouseButtons[button] = false;
 }
 
 void ForgedFlightApp::OnMouseWheel(int delta)
 {
-    // Adjust movement speed based on mouse wheel
-    if (m_pCamera)
+    // Forward mouse wheel to ImGui first
+    if (m_pImGuiImpl)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        io.MouseWheel += delta > 0 ? 1.0f : -1.0f;
+    }
+
+    // Only handle camera speed adjustment if ImGui doesn't want mouse input
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.WantCaptureMouse && m_pCamera)
     {
         float currentSpeed = m_pCamera->GetMovementSpeed();
         float newSpeed = currentSpeed + (delta > 0 ? 2.0f : -2.0f);
         newSpeed = std::max(1.0f, std::min(50.0f, newSpeed));
         m_pCamera->SetMovementSpeed(newSpeed);
     }
+}
+
+void ForgedFlightApp::ShowCameraDebugConsole()
+{
+    static int frameCount = 0;
+    frameCount++;
+    
+    // Print debug info every 30 frames (twice per second) to see it more often
+    if (frameCount % 30 != 0 || !m_pCamera)
+        return;
+        
+    std::cout << "\n=== CAMERA DEBUG INFO (Frame " << frameCount << ") ===" << std::endl;
+    
+    // Camera position
+    float3 position = m_pCamera->GetPosition();
+    std::cout << "Position: (" << position.x << ", " << position.y << ", " << position.z << ")" << std::endl;
+    
+    // Camera rotation (pitch, yaw)
+    float pitch = m_pCamera->GetPitch();
+    float yaw = m_pCamera->GetYaw();
+    std::cout << "Rotation: Pitch=" << pitch << "°, Yaw=" << yaw << "°" << std::endl;
+    
+    // Camera direction vector
+    float3 forward = m_pCamera->GetForwardVector();
+    std::cout << "Forward: (" << forward.x << ", " << forward.y << ", " << forward.z << ")" << std::endl;
+    
+    // Movement speed
+    float speed = m_pCamera->GetMovementSpeed();
+    std::cout << "Movement Speed: " << speed << std::endl;
+    
+    // Projection parameters
+    float fov = m_pCamera->GetFOV();
+    float aspectRatio = m_pCamera->GetAspectRatio();
+    float nearPlane = m_pCamera->GetNearPlane();
+    float farPlane = m_pCamera->GetFarPlane();
+    
+    std::cout << "FOV: " << fov << "°" << std::endl;
+    std::cout << "Aspect Ratio: " << aspectRatio << std::endl;
+    std::cout << "Near Plane: " << nearPlane << std::endl;
+    std::cout << "Far Plane: " << farPlane << std::endl;
+    
+    std::cout << "=========================" << std::endl;
+    std::cout.flush(); // Force output to console immediately
+}
+
+void ForgedFlightApp::InitializeImGui()
+{
+    try 
+    {
+        std::cout << "Starting ImGui initialization" << std::endl;
+        
+        if (!m_pDevice || !m_pImmediateContext)
+        {
+            std::cout << "Error: Device or context is null" << std::endl;
+            return;
+        }
+        
+        // Create ImGui implementation
+        ImGuiDiligentCreateInfo CreateInfo;
+        CreateInfo.pDevice = m_pDevice;
+        CreateInfo.BackBufferFmt = m_pSwapChain->GetDesc().ColorBufferFormat;
+        CreateInfo.DepthBufferFmt = m_pSwapChain->GetDesc().DepthBufferFormat;
+        
+        std::cout << "ImGui CreateInfo set up with device and formats" << std::endl;
+        
+        m_pImGuiImpl = std::make_unique<ImGuiImplDiligent>(CreateInfo);
+        
+        std::cout << "ImGui implementation created successfully" << std::endl;
+        
+        // Set up ImGui style and ensure DisplaySize is set correctly
+        ImGuiIO& io = ImGui::GetIO();
+        io.DisplaySize.x = static_cast<float>(m_WindowWidth);
+        io.DisplaySize.y = static_cast<float>(m_WindowHeight);
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        
+        std::cout << "ImGui IO configured with DisplaySize: " << io.DisplaySize.x << "x" << io.DisplaySize.y << std::endl;
+    }
+    catch (const std::exception& e)
+    {
+        std::string error = "Failed to initialize ImGui: ";
+        error += e.what();
+        std::cout << error << std::endl;
+        MessageBoxA(nullptr, error.c_str(), "ImGui Error", MB_OK | MB_ICONERROR);
+    }
+    catch (...)
+    {
+        std::cout << "Unknown error during ImGui initialization" << std::endl;
+        MessageBoxA(nullptr, "Unknown error during ImGui initialization", "ImGui Error", MB_OK | MB_ICONERROR);
+    }
+}
+
+void ForgedFlightApp::RenderImGuiDebugWindow()
+{
+    if (!m_pImGuiImpl || !m_pCamera)
+        return;
+        
+    // Begin ImGui frame
+    m_pImGuiImpl->NewFrame(m_WindowWidth, m_WindowHeight, SURFACE_TRANSFORM_IDENTITY);
+    
+    // Create camera debug window with enhanced features
+    ImGui::SetNextWindowSize(ImVec2(400, 500), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_FirstUseEver);
+    
+    if (ImGui::Begin("Camera Debug Info", nullptr, ImGuiWindowFlags_None))
+    {
+        ImGui::Text("=== CAMERA DEBUG INFO ===");
+        ImGui::Separator();
+        
+        // Camera position with editable values
+        float3 position = m_pCamera->GetPosition();
+        float pos[3] = { position.x, position.y, position.z };
+        if (ImGui::DragFloat3("Position", pos, 0.1f, -1000.0f, 1000.0f))
+        {
+            m_pCamera->SetPosition(float3(pos[0], pos[1], pos[2]));
+        }
+        
+        // Camera rotation (pitch, yaw) with editable values
+        float pitch = m_pCamera->GetPitch();
+        float yaw = m_pCamera->GetYaw();
+        
+        bool rotationChanged = false;
+        
+        if (ImGui::SliderFloat("Pitch", &pitch, -89.0f, 89.0f, "%.1f°"))
+        {
+            rotationChanged = true;
+        }
+        
+        if (ImGui::SliderFloat("Yaw", &yaw, -180.0f, 180.0f, "%.1f°"))
+        {
+            rotationChanged = true;
+        }
+        
+        if (rotationChanged)
+        {
+            m_pCamera->SetRotation(yaw, pitch);
+        }
+        
+        ImGui::Separator();
+        
+        // Camera direction vector (read-only)
+        float3 forward = m_pCamera->GetForwardVector();
+        ImGui::Text("Forward: (%.3f, %.3f, %.3f)", forward.x, forward.y, forward.z);
+        
+        // Movement speed with editable slider
+        float speed = m_pCamera->GetMovementSpeed();
+        if (ImGui::SliderFloat("Movement Speed", &speed, 1.0f, 50.0f, "%.1f"))
+        {
+            m_pCamera->SetMovementSpeed(speed);
+        }
+        
+        ImGui::Separator();
+        
+        // Projection parameters with editable values
+        float fov = m_pCamera->GetFOV();
+        if (ImGui::SliderFloat("FOV", &fov, 30.0f, 120.0f, "%.1f°"))
+        {
+            float aspectRatio = m_pCamera->GetAspectRatio();
+            float nearPlane = m_pCamera->GetNearPlane();
+            float farPlane = m_pCamera->GetFarPlane();
+            m_pCamera->SetPerspective(fov, aspectRatio, nearPlane, farPlane);
+        }
+        
+        float aspectRatio = m_pCamera->GetAspectRatio();
+        ImGui::Text("Aspect Ratio: %.3f", aspectRatio);
+        
+        float nearPlane = m_pCamera->GetNearPlane();
+        float farPlane = m_pCamera->GetFarPlane();
+        
+        float planes[2] = { nearPlane, farPlane };
+        if (ImGui::DragFloat2("Near/Far Planes", planes, 0.1f, 0.01f, 10000.0f))
+        {
+            float fov = m_pCamera->GetFOV();
+            float aspectRatio = m_pCamera->GetAspectRatio();
+            m_pCamera->SetPerspective(fov, aspectRatio, planes[0], planes[1]);
+        }
+        
+        ImGui::Separator();
+        
+        // Reset button
+        if (ImGui::Button("Reset Camera"))
+        {
+            m_pCamera->SetPosition(float3(0.0f, 50.0f, 0.0f));
+            m_pCamera->SetRotation(0.0f, 0.0f); // yaw, pitch
+            m_pCamera->SetMovementSpeed(10.0f);
+        }
+        
+        ImGui::SameLine();
+        
+        // Quick position presets
+        if (ImGui::Button("Ground Level"))
+        {
+            m_pCamera->SetPosition(float3(0.0f, 2.0f, 0.0f));
+        }
+        
+        ImGui::Separator();
+        ImGui::Text("Controls:");
+        ImGui::BulletText("WASD - Move camera");
+        ImGui::BulletText("Right Mouse - Look around");
+        ImGui::BulletText("Mouse Wheel - Speed control");
+        ImGui::BulletText("Drag values above to adjust camera");
+        
+        // Window size info
+        ImGui::Separator();
+        ImGui::Text("Window: %dx%d", m_WindowWidth, m_WindowHeight);
+        
+        // Frame rate info
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 
+                   1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+    }
+    ImGui::End();
+    
+    // Render ImGui
+    m_pImGuiImpl->Render(m_pImmediateContext);
 }

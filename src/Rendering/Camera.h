@@ -24,6 +24,17 @@ public:
     const float3& GetRight() const { return m_Right; }
     const float3& GetUp() const { return m_Up; }
     
+    // Rotation getters
+    float GetYaw() const { return m_Yaw; }
+    float GetPitch() const { return m_Pitch; }
+    float3 GetForwardVector() const { return m_Forward; }
+    
+    // Projection getters
+    float GetFOV() const { return m_FOV; }
+    float GetAspectRatio() const { return m_AspectRatio; }
+    float GetNearPlane() const { return m_NearPlane; }
+    float GetFarPlane() const { return m_FarPlane; }
+    
     float4x4 GetViewMatrix() const;
     float4x4 GetProjectionMatrix() const;
     float4x4 GetViewProjectionMatrix() const;
