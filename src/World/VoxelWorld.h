@@ -23,6 +23,9 @@ public:
     void LoadChunk(int chunkX, int chunkY, int chunkZ);
     void UnloadChunk(int chunkX, int chunkY, int chunkZ);
     
+    // Access to loaded chunks for rendering
+    const std::unordered_map<int64_t, std::unique_ptr<Chunk>>& GetLoadedChunks() const { return m_Chunks; }
+    
     // Settings
     void SetRenderDistance(int distance) { m_RenderDistance = distance; }
     int GetRenderDistance() const { return m_RenderDistance; }
@@ -32,7 +35,7 @@ private:
     std::unordered_map<int64_t, std::unique_ptr<Chunk>> m_Chunks;
     
     // World settings
-    int m_RenderDistance = 8;
+    int m_RenderDistance = 3;  // Default to 3 chunks for testing
     float3 m_LastPlayerPosition;
     
     // Helper methods

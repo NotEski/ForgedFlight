@@ -39,21 +39,65 @@ void ChunkManager::UpdateChunkBuffers(VoxelWorld* world)
     if (!world)
         return;
     
-    // This is a simplified approach - in a real implementation, you'd iterate through
-    // the world's chunks and update only the dirty ones
-    // For now, we'll assume the world manages chunk updates internally
+    std::cout << "UpdateChunkBuffers: Starting update..." << std::endl;
+    
+    // Get the loaded chunks from the voxel world
+    const auto& loadedChunks = world->GetLoadedChunks();
+    
+    std::cout << "UpdateChunkBuffers: Found " << loadedChunks.size() << " loaded chunks" << std::endl;
+    
+    for (const auto& [chunkKey, chunk] : loadedChunks)
+    {
+        if (!chunk)
+            continue;
+        
+        int chunkX = chunk->GetChunkX();
+        int chunkY = chunk->GetChunkY();
+        int chunkZ = chunk->GetChunkZ();
+        
+        std::cout << "UpdateChunkBuffers: Processing chunk (" << chunkX << ", " << chunkY << ", " << chunkZ << ")" << std::endl;
+        
+        // Generate mesh if needed
+        if (chunk->IsDirty())
+        {
+            std::cout << "UpdateChunkBuffers: Chunk is dirty, building mesh..." << std::endl;
+            chunk->BuildMesh();
+        }
+        
+        // Get or create render data for this chunk
+        ChunkRenderData& renderData = m_ChunkRenderData[chunkKey];
+        
+        // Create GPU buffers if mesh was built and we need to update
+        if (chunk->IsMeshBuilt() && (renderData.NeedsUpdate || !renderData.VertexBuffer))
+        {
+            std::cout << "UpdateChunkBuffers: Creating buffers for chunk (" << chunkX << ", " << chunkY << ", " << chunkZ << ")" << std::endl;
+            CreateChunkBuffers(chunk.get(), renderData);
+        }
+        else
+        {
+            std::cout << "UpdateChunkBuffers: Chunk (" << chunkX << ", " << chunkY << ", " << chunkZ << ") - MeshBuilt: " << chunk->IsMeshBuilt() << ", NeedsUpdate: " << renderData.NeedsUpdate << ", HasVertexBuffer: " << (renderData.VertexBuffer != nullptr) << std::endl;
+        }
+    }
+    
+    std::cout << "UpdateChunkBuffers: Completed. Total render data entries: " << m_ChunkRenderData.size() << std::endl;
 }
 
 void ChunkManager::CreateChunkBuffers(Chunk* chunk, ChunkRenderData& renderData)
 {
     if (!chunk || !chunk->IsMeshBuilt())
+    {
+        std::cout << "CreateChunkBuffers: Early exit - chunk null or mesh not built" << std::endl;
         return;
+    }
     
     const auto& vertices = chunk->GetVertices();
     const auto& indices = chunk->GetIndices();
     
+    std::cout << "CreateChunkBuffers: Vertices: " << vertices.size() << ", Indices: " << indices.size() << std::endl;
+    
     if (vertices.empty() || indices.empty())
     {
+        std::cout << "CreateChunkBuffers: Empty mesh data - no geometry to render" << std::endl;
         renderData.IndexCount = 0;
         return;
     }
@@ -86,6 +130,8 @@ void ChunkManager::CreateChunkBuffers(Chunk* chunk, ChunkRenderData& renderData)
     
     renderData.IndexCount = indices.size();
     renderData.NeedsUpdate = false;
+    
+    std::cout << "CreateChunkBuffers: Successfully created buffers with " << renderData.IndexCount << " indices" << std::endl;
 }
 
 int64_t ChunkManager::GetChunkKey(int chunkX, int chunkY, int chunkZ) const

@@ -100,7 +100,8 @@ private:
     int                                 m_LastMouseX = 0;
     int                                 m_LastMouseY = 0;
     bool                                m_FirstMouseMove = true;
-
+    
+    // Debug/rendering options
     // Timing
     double                              m_LastFrameTime = 0.0;
 

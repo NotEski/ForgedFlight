@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Disable Diligent Engine samples, tutorials, and unnecessary components
-option(DILIGENT_BUILD_SAMPLES "Build Diligent Engine samples" ON)
+option(DILIGENT_BUILD_SAMPLES "Build Diligent Engine samples" OFF)
 option(DILIGENT_BUILD_DOCS "Build Diligent Engine documentation" OFF)
 option(DILIGENT_BUILD_FX "Build DiligentFX module" ON)  # Enable for advanced lighting and post-processing
 option(DILIGENT_BUILD_TOOLS "Build Diligent Engine tools" ON)  # Keep ON as we need TextureLoader
@@ -39,6 +39,13 @@ set(ALL_SOURCES
 
 # Create the executable
 add_executable(ForgedFlight WIN32 ${ALL_SOURCES})
+
+# Set Windows subsystem to WINDOWS (no console)
+if(WIN32)
+    set_target_properties(ForgedFlight PROPERTIES
+        LINK_FLAGS "/SUBSYSTEM:WINDOWS"
+    )
+endif()
 
 # Link against Diligent Engine
 target_link_libraries(ForgedFlight

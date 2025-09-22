@@ -6,10 +6,15 @@
  */
 
 #include <memory>
-#include <iostream>
 #include <exception>
 #include <chrono>
 #include <string>
+
+#ifdef _DEBUG
+#include <iostream>
+#include <io.h>
+#include <fcntl.h>
+#endif
 
 #ifndef NOMINMAX
 #    define NOMINMAX
@@ -62,12 +67,27 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance,
 
     try
     {
-        // Allocate a console for this GUI application
-        AllocConsole();
-        FILE* pCout;
-        freopen_s(&pCout, "CONOUT$", "w", stdout);
-        
-        std::cout << "Forged Flight starting..." << std::endl;
+#ifdef _DEBUG
+        // Allocate a console for debug builds only
+        if (AllocConsole())
+        {
+            FILE* pCout;
+            freopen_s(&pCout, "CONOUT$", "w", stdout);
+            FILE* pCerr;
+            freopen_s(&pCerr, "CONOUT$", "w", stderr);
+            FILE* pCin;
+            freopen_s(&pCin, "CONIN$", "r", stdin);
+            
+            // Make cout, wcout, cin, wcin, wcerr, cerr, wclog and clog
+            // point to console as well
+            std::ios::sync_with_stdio(true);
+            
+            // Optional: Set console title
+            SetConsoleTitleA("Forged Flight Debug Console");
+            
+            std::cout << "Forged Flight Debug Console Initialized" << std::endl;
+        }
+#endif
         
         // Initialize COM
         HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
@@ -81,10 +101,24 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance,
         RENDER_DEVICE_TYPE deviceType = RENDER_DEVICE_TYPE_D3D12; // Default
         if (!ProcessCommandLine(GetCommandLineA(), deviceType))
         {
+#ifdef _DEBUG
             std::cerr << "Failed to process command line arguments" << std::endl;
+#endif
             CoUninitialize();
             return -1;
         }
+
+#ifdef _DEBUG
+        std::cout << "Using graphics API: ";
+        switch (deviceType)
+        {
+            case RENDER_DEVICE_TYPE_D3D11: std::cout << "Direct3D 11"; break;
+            case RENDER_DEVICE_TYPE_D3D12: std::cout << "Direct3D 12"; break;
+            case RENDER_DEVICE_TYPE_GL: std::cout << "OpenGL"; break;
+            case RENDER_DEVICE_TYPE_VULKAN: std::cout << "Vulkan"; break;
+        }
+        std::cout << std::endl;
+#endif
 
         // Register window class (using ANSI like Diligent samples)
         WNDCLASSEXA wcex = {};
@@ -103,7 +137,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance,
 
         if (!RegisterClassExA(&wcex))
         {
+#ifdef _DEBUG
             std::cerr << "Failed to register window class" << std::endl;
+#endif
             CoUninitialize();
             return -1;
         }
@@ -133,7 +169,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance,
 
         if (!hWnd)
         {
+#ifdef _DEBUG
             std::cerr << "Failed to create window" << std::endl;
+#endif
             CoUninitialize();
             return -1;
         }
@@ -144,7 +182,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance,
         // Create application instance
         g_pTheApp = std::make_unique<ForgedFlightApp>();
 
-        std::cout << "About to initialize application" << std::endl;
+#ifdef _DEBUG
+        std::cout << "Initializing application..." << std::endl;
+#endif
 
         // Initialize the application
         NativeAppInitAttrib initAttrib;
@@ -153,8 +193,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance,
 
         g_pTheApp->Initialize(initAttrib);
 
-        std::cout << "Forged Flight initialized successfully!" << std::endl;
-        std::cout << "Starting main game loop..." << std::endl;
+#ifdef _DEBUG
+        std::cout << "Application initialized successfully! Starting main loop..." << std::endl;
+#endif
 
         // Main message loop
         MSG msg = {};
@@ -180,13 +221,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance,
                 try 
                 {
                     // Update and render
-                    std::cout << "Calling Update..." << std::endl;
                     g_pTheApp->Update(std::chrono::duration<double>(currentTime.time_since_epoch()).count(), deltaTime);
-                    
-                    std::cout << "Calling Render..." << std::endl;
                     g_pTheApp->Render();
-                    
-                    std::cout << "Calling Present..." << std::endl;
                     g_pTheApp->Present();
                     
                     // Update window title with FPS every half second
@@ -208,18 +244,20 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance,
                         frameCount = 0;
                         lastTitleUpdate = currentTime;
                     }
-                    
-                    std::cout << "Frame completed successfully" << std::endl;
                 }
                 catch (const std::exception& e)
                 {
-                    std::cout << "Exception in main loop: " << e.what() << std::endl;
+#ifdef _DEBUG
+                    std::cerr << "Exception in main loop: " << e.what() << std::endl;
+#endif
                     MessageBoxA(nullptr, e.what(), "Main Loop Error", MB_OK | MB_ICONERROR);
                     break;
                 }
                 catch (...)
                 {
-                    std::cout << "Unknown exception in main loop" << std::endl;
+#ifdef _DEBUG
+                    std::cerr << "Unknown exception in main loop" << std::endl;
+#endif
                     MessageBoxA(nullptr, "Unknown error in main loop", "Main Loop Error", MB_OK | MB_ICONERROR);
                     break;
                 }
@@ -228,20 +266,33 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance,
 
         // Cleanup
         g_pTheApp.reset();
+
+#ifdef _DEBUG
+        std::cout << "Application shutdown complete." << std::endl;
+        // Keep console open for a moment in debug builds
+        std::cout << "Press Enter to exit..." << std::endl;
+        std::cin.get();
+        FreeConsole();
+#endif
+
         CoUninitialize();
 
         return static_cast<int>(msg.wParam);
     }
     catch (const std::exception& e)
     {
+#ifdef _DEBUG
         std::cerr << "Unhandled exception: " << e.what() << std::endl;
+#endif
         MessageBoxA(nullptr, e.what(), "Fatal Error", MB_OK | MB_ICONERROR);
         CoUninitialize();
         return -1;
     }
     catch (...)
     {
+#ifdef _DEBUG
         std::cerr << "Unknown exception occurred" << std::endl;
+#endif
         MessageBoxA(nullptr, "An unknown error occurred", "Fatal Error", MB_OK | MB_ICONERROR);
         CoUninitialize();
         return -1;
@@ -387,7 +438,6 @@ bool ProcessCommandLine(const char* cmdLine, RENDER_DEVICE_TYPE& deviceType)
 #if D3D11_SUPPORTED
             deviceType = RENDER_DEVICE_TYPE_D3D11;
 #else
-            std::cerr << "Direct3D11 is not supported" << std::endl;
             return false;
 #endif
         }
@@ -396,7 +446,6 @@ bool ProcessCommandLine(const char* cmdLine, RENDER_DEVICE_TYPE& deviceType)
 #if D3D12_SUPPORTED
             deviceType = RENDER_DEVICE_TYPE_D3D12;
 #else
-            std::cerr << "Direct3D12 is not supported" << std::endl;
             return false;
 #endif
         }
@@ -405,7 +454,6 @@ bool ProcessCommandLine(const char* cmdLine, RENDER_DEVICE_TYPE& deviceType)
 #if GL_SUPPORTED
             deviceType = RENDER_DEVICE_TYPE_GL;
 #else
-            std::cerr << "OpenGL is not supported" << std::endl;
             return false;
 #endif
         }
@@ -414,13 +462,11 @@ bool ProcessCommandLine(const char* cmdLine, RENDER_DEVICE_TYPE& deviceType)
 #if VULKAN_SUPPORTED
             deviceType = RENDER_DEVICE_TYPE_VULKAN;
 #else
-            std::cerr << "Vulkan is not supported" << std::endl;
             return false;
 #endif
         }
         else
         {
-            std::cerr << "Invalid device type: " << mode << ". Supported types: d3d11, d3d12, gl, vk" << std::endl;
             return false;
         }
     }
@@ -436,7 +482,6 @@ bool ProcessCommandLine(const char* cmdLine, RENDER_DEVICE_TYPE& deviceType)
 #elif GL_SUPPORTED
         deviceType = RENDER_DEVICE_TYPE_GL;
 #else
-        std::cerr << "No supported graphics API found" << std::endl;
         return false;
 #endif
     }

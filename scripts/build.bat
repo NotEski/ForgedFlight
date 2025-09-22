@@ -1,9 +1,5 @@
-mkdir build
-
 cd build
-
-cmake .. -DCMAKE_BUILD_TYPE=Debug
 
 cmake --build . --config Debug
 
-./Debug/ForgedFlight
+.\Debug\ForgedFlight.exe

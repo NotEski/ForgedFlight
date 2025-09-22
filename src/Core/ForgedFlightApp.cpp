@@ -69,7 +69,10 @@ void ForgedFlightApp::Initialize(const NativeAppInitAttrib& InitAttrib)
         // Initialize voxel game components
         m_pCamera = std::make_unique<Camera>();
         m_pCamera->SetPerspective(45.0f, static_cast<float>(m_WindowWidth) / m_WindowHeight, 0.1f, 1000.0f);
-        m_pCamera->SetPosition(float3(0.0f, 50.0f, 0.0f));
+        // Position camera to look directly at the cube from a good viewing angle
+        m_pCamera->SetPosition(float3(3.0f, 3.0f, 3.0f));
+        m_pCamera->SetRotation(135.0f, -30.0f); // Fixed: Look toward origin (135° = southwest direction)
+        m_pCamera->SetMovementSpeed(5.0f); // Slower speed for better control
         
         std::cout << "Camera created, creating voxel world" << std::endl;
         
@@ -293,7 +296,8 @@ void ForgedFlightApp::CreateCubePipelineState()
     PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = m_pSwapChain->GetDesc().ColorBufferFormat;
     PSOCreateInfo.GraphicsPipeline.DSVFormat = m_pSwapChain->GetDesc().DepthBufferFormat;
     PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
+    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE; // Disable culling for debugging
+    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_SOLID; // Wireframe to see structure
     PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = True;
 
     PSOCreateInfo.GraphicsPipeline.InputLayout.LayoutElements = LayoutElems;
@@ -411,17 +415,13 @@ void ForgedFlightApp::CreateUniformBuffer()
 
 void ForgedFlightApp::InitializeVoxelWorld()
 {
-    // Load some initial chunks around the player (cubic area)
-    for (int x = -2; x <= 2; ++x)
-    {
-        for (int y = -1; y <= 3; ++y)  // Load chunks from underground to sky
-        {
-            for (int z = -2; z <= 2; ++z)
-            {
-                m_pVoxelWorld->LoadChunk(x, y, z);
-            }
-        }
-    }
+    // For testing: Load just a single chunk at origin to see if the pipeline works
+    m_pVoxelWorld->LoadChunk(0, 0, 0);
+    m_pVoxelWorld->LoadChunk(1, 0, 0);
+    m_pVoxelWorld->LoadChunk(0, 0, 1);
+    m_pVoxelWorld->LoadChunk(1, 0, 1);
+    
+    std::cout << "InitializeVoxelWorld: Loaded single chunk at (0,0,0)" << std::endl;
 }
 
 void ForgedFlightApp::Update(double CurrTime, double ElapsedTime)
@@ -433,8 +433,7 @@ void ForgedFlightApp::Update(double CurrTime, double ElapsedTime)
     UpdateCamera(ElapsedTime);
     std::cout << "Update: UpdateCamera completed" << std::endl;
     
-    // Temporarily disable voxel world updates to isolate the crash
-    /*
+    // Update voxel world and chunk manager (re-enabled for chunk system testing)
     // Update voxel world
     if (m_pVoxelWorld)
     {
@@ -450,7 +449,6 @@ void ForgedFlightApp::Update(double CurrTime, double ElapsedTime)
         m_pChunkManager->UpdateChunkBuffers(m_pVoxelWorld.get());
         std::cout << "Update: Chunk manager updated" << std::endl;
     }
-    */
     
     std::cout << "Update: Completed" << std::endl;
 }
@@ -519,14 +517,15 @@ void ForgedFlightApp::Render()
         
         // Map the buffer and write data
         MapHelper<float4x4> CBConstants(m_pImmediateContext, m_pVSConstants, MAP_WRITE, MAP_FLAG_DISCARD);
-        *CBConstants = viewProjMatrix.Transpose(); // Transpose for HLSL column-major matrices
+        *CBConstants = viewProjMatrix; // Try without transpose first
         
         std::cout << "Render: Uniform buffer updated" << std::endl;
     }
 
-    std::cout << "Render: About to render voxel world" << std::endl;
+    std::cout << "Render: About to render cubes" << std::endl;
     
-    // Render voxel world
+    // Render voxel world chunks only
+    std::cout << "Render: Rendering voxel world chunks" << std::endl;
     RenderVoxelWorld();
     
     // Apply post-processing effects (SSAO, Bloom, tone mapping)
@@ -842,13 +841,59 @@ void ForgedFlightApp::RenderImGuiDebugWindow()
         }
         
         ImGui::Separator();
+        ImGui::Text("=== CUBE DEBUG INFO ===");
+        
+        // Cube position info
+        ImGui::Text("Cube Position: (0.0, 0.0, 0.0)");
+        ImGui::Text("Cube Size: 1.0 x 1.0 x 1.0");
+        
+        // Distance to cube
+        float3 cubePos = float3(0.0f, 0.0f, 0.0f);
+        float3 camPos = m_pCamera->GetPosition();
+        float distance = length(camPos - cubePos);
+        ImGui::Text("Distance to Cube: %.2f", distance);
+        
+        // Camera presets for cube viewing
+        if (ImGui::Button("Look at Cube"))
+        {
+            m_pCamera->SetPosition(float3(3.0f, 3.0f, 3.0f));
+            m_pCamera->SetRotation(135.0f, -30.0f); // Fixed: 135° = southwest direction toward origin
+            m_pCamera->SetMovementSpeed(5.0f);
+        }
+        
+        ImGui::SameLine();
+        
+        if (ImGui::Button("Cube Close-up"))
+        {
+            m_pCamera->SetPosition(float3(1.5f, 1.5f, 1.5f));
+            m_pCamera->SetRotation(135.0f, -30.0f); // Fixed: 135° = southwest direction toward origin
+            m_pCamera->SetMovementSpeed(2.0f);
+        }
+        
+        if (ImGui::Button("Front View"))
+        {
+            m_pCamera->SetPosition(float3(0.0f, 0.0f, 5.0f));
+            m_pCamera->SetRotation(180.0f, 0.0f); // Look straight at cube from front
+            m_pCamera->SetMovementSpeed(3.0f);
+        }
+        
+        ImGui::SameLine();
+        
+        if (ImGui::Button("Cube Top View"))
+        {
+            m_pCamera->SetPosition(float3(0.0f, 5.0f, 0.0f));
+            m_pCamera->SetRotation(0.0f, -90.0f);
+            m_pCamera->SetMovementSpeed(3.0f);
+        }
+        
+        ImGui::Separator();
         
         // Reset button
         if (ImGui::Button("Reset Camera"))
         {
-            m_pCamera->SetPosition(float3(0.0f, 50.0f, 0.0f));
-            m_pCamera->SetRotation(0.0f, 0.0f); // yaw, pitch
-            m_pCamera->SetMovementSpeed(10.0f);
+            m_pCamera->SetPosition(float3(0.0f, 0.0f, 5.0f));
+            m_pCamera->SetRotation(180.0f, 0.0f); // Look straight at cube from front
+            m_pCamera->SetMovementSpeed(3.0f);
         }
         
         ImGui::SameLine();
@@ -864,7 +909,22 @@ void ForgedFlightApp::RenderImGuiDebugWindow()
         ImGui::BulletText("WASD - Move camera");
         ImGui::BulletText("Right Mouse - Look around");
         ImGui::BulletText("Mouse Wheel - Speed control");
+        ImGui::BulletText("Use cube buttons above for quick positioning");
         ImGui::BulletText("Drag values above to adjust camera");
+        
+        ImGui::Separator();
+        ImGui::Text("=== RENDERING DEBUG ===");
+        
+        // Render distance control for chunk system
+        if (m_pVoxelWorld)
+        {
+            int renderDistance = m_pVoxelWorld->GetRenderDistance();
+            if (ImGui::SliderInt("Render Distance (Chunks)", &renderDistance, 1, 16))
+            {
+                m_pVoxelWorld->SetRenderDistance(renderDistance);
+            }
+            ImGui::Text("Total chunks: ~%d", (2 * renderDistance + 1) * (2 * renderDistance + 1) * (2 * renderDistance + 1));
+        }
         
         // Window size info
         ImGui::Separator();

@@ -37,49 +37,25 @@ void Chunk::SetBlock(int x, int y, int z, BlockType type)
 
 void Chunk::Generate()
 {
-    // Simple terrain generation for cubic chunks
-    std::mt19937 gen(m_ChunkX * 1000 + m_ChunkY * 100 + m_ChunkZ);
-    std::uniform_real_distribution<float> noise(0.0f, 1.0f);
+    std::cout << "Chunk::Generate: Generating chunk (" << m_ChunkX << ", " << m_ChunkY << ", " << m_ChunkZ << ")" << std::endl;
     
+    // Clear all blocks to air first
     for (int x = 0; x < CHUNK_SIZE; ++x)
     {
         for (int y = 0; y < CHUNK_HEIGHT; ++y)
         {
             for (int z = 0; z < CHUNK_SIZE; ++z)
             {
-                // Calculate world coordinates
-                int worldX = m_ChunkX * CHUNK_SIZE + x;
-                int worldY = m_ChunkY * CHUNK_HEIGHT + y;
-                int worldZ = m_ChunkZ * CHUNK_SIZE + z;
-                
-                // Generate height based on simple noise
-                float height = 32.0f + 16.0f * sin(worldX * 0.1f) * cos(worldZ * 0.1f);
-                height += 8.0f * sin(worldX * 0.2f) * cos(worldZ * 0.2f);
-                int terrainHeight = static_cast<int>(height);
-                
-                // Determine block type based on world Y position
-                if (worldY < terrainHeight - 5)
-                {
-                    m_Blocks[x][y][z].type = BlockType::Stone;
-                }
-                else if (worldY < terrainHeight - 1)
-                {
-                    m_Blocks[x][y][z].type = BlockType::Dirt;
-                }
-                else if (worldY < terrainHeight)
-                {
-                    m_Blocks[x][y][z].type = BlockType::Grass;
-                }
-                else
-                {
-                    m_Blocks[x][y][z].type = BlockType::Air;
-                }
+                m_Blocks[x][y][z].type = BlockType::Air;
             }
         }
     }
     
-    // Always place a special block at (1,1,1) for UV color demonstration
-    m_Blocks[1][1][1].type = BlockType::Wood;
+    // For debugging: place a single cube at (0,0,0) in the origin chunk only
+
+    m_Blocks[0][0][0].type = BlockType::Stone;
+    std::cout << "Chunk::Generate: Placed stone block at (0,0,0) in origin chunk" << std::endl;
+
     
     m_Dirty = true;
 }
@@ -87,7 +63,12 @@ void Chunk::Generate()
 void Chunk::BuildMesh()
 {
     if (!m_Dirty)
+    {
+        std::cout << "Chunk::BuildMesh: Chunk (" << m_ChunkX << ", " << m_ChunkY << ", " << m_ChunkZ << ") is not dirty, skipping" << std::endl;
         return;
+    }
+    
+    std::cout << "Chunk::BuildMesh: Building mesh for chunk (" << m_ChunkX << ", " << m_ChunkY << ", " << m_ChunkZ << ")" << std::endl;
     
     m_Vertices.clear();
     m_Indices.clear();
@@ -103,6 +84,8 @@ void Chunk::BuildMesh()
                 Block block = m_Blocks[x][y][z];
                 if (block.type == BlockType::Air)
                     continue;
+                
+                std::cout << "Chunk::BuildMesh: Found non-air block at (" << x << ", " << y << ", " << z << ") - type: " << static_cast<int>(block.type) << std::endl;
                 
                 float3 blockPos = float3(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
                 
@@ -169,6 +152,8 @@ void Chunk::BuildMesh()
             }
         }
     }
+    
+    std::cout << "Chunk::BuildMesh: Completed mesh for chunk (" << m_ChunkX << ", " << m_ChunkY << ", " << m_ChunkZ << ") - Vertices: " << m_Vertices.size() << ", Indices: " << m_Indices.size() << std::endl;
     
     m_MeshBuilt = true;
     m_Dirty = false;

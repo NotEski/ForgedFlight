@@ -2,7 +2,7 @@
 #include <cmath>
 
 VoxelWorld::VoxelWorld()
-    : m_LastPlayerPosition(0, 0, 0)
+    : m_LastPlayerPosition(0, 0, 0), m_RenderDistance(3) // Set to 3 chunks for initial testing
 {
 }
 
