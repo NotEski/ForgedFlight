@@ -61,34 +61,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance,
                    _In_ int nShowCmd)
 {
 
-#if defined(_DEBUG) || defined(DEBUG)
-    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-#endif
-
     try
-    {
-#ifdef _DEBUG
-        // Allocate a console for debug builds only
-        if (AllocConsole())
-        {
-            FILE* pCout;
-            freopen_s(&pCout, "CONOUT$", "w", stdout);
-            FILE* pCerr;
-            freopen_s(&pCerr, "CONOUT$", "w", stderr);
-            FILE* pCin;
-            freopen_s(&pCin, "CONIN$", "r", stdin);
-            
-            // Make cout, wcout, cin, wcin, wcerr, cerr, wclog and clog
-            // point to console as well
-            std::ios::sync_with_stdio(true);
-            
-            // Optional: Set console title
-            SetConsoleTitleA("Forged Flight Debug Console");
-            
-            std::cout << "Forged Flight Debug Console Initialized" << std::endl;
-        }
-#endif
-        
+    {        
         // Initialize COM
         HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
         if (FAILED(hr))
@@ -101,24 +75,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance,
         RENDER_DEVICE_TYPE deviceType = RENDER_DEVICE_TYPE_D3D12; // Default
         if (!ProcessCommandLine(GetCommandLineA(), deviceType))
         {
-#ifdef _DEBUG
-            std::cerr << "Failed to process command line arguments" << std::endl;
-#endif
             CoUninitialize();
             return -1;
         }
-
-#ifdef _DEBUG
-        std::cout << "Using graphics API: ";
-        switch (deviceType)
-        {
-            case RENDER_DEVICE_TYPE_D3D11: std::cout << "Direct3D 11"; break;
-            case RENDER_DEVICE_TYPE_D3D12: std::cout << "Direct3D 12"; break;
-            case RENDER_DEVICE_TYPE_GL: std::cout << "OpenGL"; break;
-            case RENDER_DEVICE_TYPE_VULKAN: std::cout << "Vulkan"; break;
-        }
-        std::cout << std::endl;
-#endif
 
         // Register window class (using ANSI like Diligent samples)
         WNDCLASSEXA wcex = {};
@@ -137,9 +96,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance,
 
         if (!RegisterClassExA(&wcex))
         {
-#ifdef _DEBUG
-            std::cerr << "Failed to register window class" << std::endl;
-#endif
             CoUninitialize();
             return -1;
         }
@@ -182,20 +138,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance,
         // Create application instance
         g_pTheApp = std::make_unique<ForgedFlightApp>();
 
-#ifdef _DEBUG
-        std::cout << "Initializing application..." << std::endl;
-#endif
-
         // Initialize the application
         NativeAppInitAttrib initAttrib;
         initAttrib.hWnd = hWnd;
         initAttrib.DeviceType = deviceType;
 
         g_pTheApp->Initialize(initAttrib);
-
-#ifdef _DEBUG
-        std::cout << "Application initialized successfully! Starting main loop..." << std::endl;
-#endif
 
         // Main message loop
         MSG msg = {};
@@ -267,32 +215,18 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance,
         // Cleanup
         g_pTheApp.reset();
 
-#ifdef _DEBUG
-        std::cout << "Application shutdown complete." << std::endl;
-        // Keep console open for a moment in debug builds
-        std::cout << "Press Enter to exit..." << std::endl;
-        std::cin.get();
-        FreeConsole();
-#endif
-
         CoUninitialize();
 
         return static_cast<int>(msg.wParam);
     }
     catch (const std::exception& e)
     {
-#ifdef _DEBUG
-        std::cerr << "Unhandled exception: " << e.what() << std::endl;
-#endif
         MessageBoxA(nullptr, e.what(), "Fatal Error", MB_OK | MB_ICONERROR);
         CoUninitialize();
         return -1;
     }
     catch (...)
     {
-#ifdef _DEBUG
-        std::cerr << "Unknown exception occurred" << std::endl;
-#endif
         MessageBoxA(nullptr, "An unknown error occurred", "Fatal Error", MB_OK | MB_ICONERROR);
         CoUninitialize();
         return -1;

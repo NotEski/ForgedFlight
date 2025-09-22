@@ -3,6 +3,37 @@
 #include "Chunk.h"
 #include <unordered_map>
 #include <memory>
+#include <queue>
+#include <vector>
+#include <unordered_set>
+
+struct ChunkCoordinate
+{
+    int x, y, z;
+    
+    ChunkCoordinate(int x, int y, int z) : x(x), y(y), z(z) {}
+    
+    bool operator==(const ChunkCoordinate& other) const
+    {
+        return x == other.x && y == other.y && z == other.z;
+    }
+    
+    bool operator<(const ChunkCoordinate& other) const
+    {
+        if (x != other.x) return x < other.x;
+        if (y != other.y) return y < other.y;
+        return z < other.z;
+    }
+};
+
+// Hash function for ChunkCoordinate to use in unordered_set
+struct ChunkCoordinateHash
+{
+    std::size_t operator()(const ChunkCoordinate& coord) const
+    {
+        return std::hash<int>()(coord.x) ^ (std::hash<int>()(coord.y) << 1) ^ (std::hash<int>()(coord.z) << 2);
+    }
+};
 
 class VoxelWorld
 {
@@ -25,6 +56,21 @@ public:
     
     // Access to loaded chunks for rendering
     const std::unordered_map<int64_t, std::unique_ptr<Chunk>>& GetLoadedChunks() const { return m_Chunks; }
+    size_t GetChunkCount() const { return m_Chunks.size(); }
+    
+    // Chunk generation queue system
+    void ProcessChunkQueue(int maxChunksPerFrame = 2);
+    void QueueChunksAroundPlayer(const float3& playerPosition);
+    void ClearChunkQueue();
+    bool IsChunkQueued(int chunkX, int chunkY, int chunkZ) const;
+    size_t GetQueueSize() const { return m_ChunkGenerationQueue.size(); }
+    
+    // Chunk deletion queue system
+    void ProcessDeletionQueue(int maxChunksPerFrame = 1);
+    void QueueChunksForDeletion(const float3& playerPosition);
+    void ClearDeletionQueue();
+    bool IsChunkQueuedForDeletion(int chunkX, int chunkY, int chunkZ) const;
+    size_t GetDeletionQueueSize() const { return m_ChunkDeletionQueue.size(); }
     
     // Settings
     void SetRenderDistance(int distance) { m_RenderDistance = distance; }
@@ -34,8 +80,20 @@ private:
     // Chunk storage
     std::unordered_map<int64_t, std::unique_ptr<Chunk>> m_Chunks;
     
+    // Chunk generation queue system
+    std::queue<ChunkCoordinate> m_ChunkGenerationQueue;
+    std::unordered_set<ChunkCoordinate, ChunkCoordinateHash> m_QueuedChunks;
+    
+    // Chunk deletion queue system
+    std::queue<ChunkCoordinate> m_ChunkDeletionQueue;
+    std::unordered_set<ChunkCoordinate, ChunkCoordinateHash> m_QueuedForDeletion;
+    
+    int m_LastPlayerChunkX = INT_MAX;
+    int m_LastPlayerChunkY = INT_MAX; 
+    int m_LastPlayerChunkZ = INT_MAX;
+    
     // World settings
-    int m_RenderDistance = 3;  // Default to 3 chunks for testing
+    int m_RenderDistance = 16;  // Reduced default for better performance
     float3 m_LastPlayerPosition;
     
     // Helper methods

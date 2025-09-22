@@ -34,19 +34,35 @@ void Camera::SetRotation(float yaw, float pitch)
 
 void Camera::MoveForward(float distance)
 {
-    m_Position += m_Forward * distance;
+    // Create horizontal-only forward vector (ignore pitch, Y component = 0)
+    float3 horizontalForward;
+    horizontalForward.x = sin(m_Yaw * PI_F / 180.0f);
+    horizontalForward.y = 0.0f;  // Keep Y at 0 for horizontal movement
+    horizontalForward.z = -cos(m_Yaw * PI_F / 180.0f);
+    horizontalForward = normalize(horizontalForward);
+    
+    m_Position += horizontalForward * -distance;
     m_ViewMatrixDirty = true;
 }
 
 void Camera::MoveRight(float distance)
 {
-    m_Position += m_Right * distance;
+    // Create horizontal-only right vector (ignore pitch, Y component = 0)
+    float3 horizontalForward;
+    horizontalForward.x = sin(m_Yaw * PI_F / 180.0f);
+    horizontalForward.y = 0.0f;  // Keep Y at 0 for horizontal movement
+    horizontalForward.z = -cos(m_Yaw * PI_F / 180.0f);
+    
+    float3 horizontalRight = normalize(cross(horizontalForward, m_WorldUp));
+    m_Position += horizontalRight * distance;
     m_ViewMatrixDirty = true;
 }
 
 void Camera::MoveUp(float distance)
 {
-    m_Position += m_Up * distance;
+    // Use world up (Y-axis) instead of camera's local up vector
+    // This ensures vertical movement is always along the world Y-axis
+    m_Position += m_WorldUp * distance;
     m_ViewMatrixDirty = true;
 }
 
@@ -100,10 +116,11 @@ void Camera::SetPerspective(float fov, float aspectRatio, float nearPlane, float
 void Camera::UpdateCameraVectors()
 {
     // Calculate the new front vector
+    // Standard FPS camera: yaw=0 points forward (-Z), yaw=90 points right (+X)
     float3 front;
-    front.x = cos(m_Yaw * PI_F / 180.0f) * cos(m_Pitch * PI_F / 180.0f);
+    front.x = sin(m_Yaw * PI_F / 180.0f) * cos(m_Pitch * PI_F / 180.0f);
     front.y = sin(m_Pitch * PI_F / 180.0f);
-    front.z = sin(m_Yaw * PI_F / 180.0f) * cos(m_Pitch * PI_F / 180.0f);
+    front.z = -cos(m_Yaw * PI_F / 180.0f) * cos(m_Pitch * PI_F / 180.0f);
     
     m_Forward = normalize(front);
     m_Right = normalize(cross(m_Forward, m_WorldUp));

@@ -102,6 +102,17 @@ private:
     bool                                m_FirstMouseMove = true;
     
     // Debug/rendering options
+    bool                                m_ShowDebugWindow = true;
+    
+    // Performance tracking
+    struct PerformanceMetrics {
+        float frameTime = 0.0f;
+        float fps = 0.0f;
+        int chunksLoaded = 0;
+        int totalChunks = 0;
+        float chunkLoadTime = 0.0f;
+    } m_PerformanceMetrics;
+    
     // Timing
     double                              m_LastFrameTime = 0.0;
 

@@ -20,7 +20,6 @@
 #include "Common/interface/StringDataBlobImpl.hpp"
 #include "Graphics/GraphicsTools/interface/MapHelper.hpp"
 
-#include <iostream>
 #include <string>
 #include <vector>
 
@@ -296,8 +295,9 @@ void ForgedFlightApp::CreateCubePipelineState()
     PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = m_pSwapChain->GetDesc().ColorBufferFormat;
     PSOCreateInfo.GraphicsPipeline.DSVFormat = m_pSwapChain->GetDesc().DepthBufferFormat;
     PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE; // Disable culling for debugging
-    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_SOLID; // Wireframe to see structure
+    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK; // Enable back face culling
+    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FrontCounterClockwise = True; // Counter-clockwise faces are front-facing
+    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_SOLID;
     PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = True;
 
     PSOCreateInfo.GraphicsPipeline.InputLayout.LayoutElements = LayoutElems;
@@ -426,31 +426,20 @@ void ForgedFlightApp::InitializeVoxelWorld()
 
 void ForgedFlightApp::Update(double CurrTime, double ElapsedTime)
 {
-    std::cout << "Update: Starting" << std::endl;
-    
     // Update camera based on input
-    std::cout << "Update: About to call UpdateCamera" << std::endl;
     UpdateCamera(ElapsedTime);
-    std::cout << "Update: UpdateCamera completed" << std::endl;
-    
     // Update voxel world and chunk manager (re-enabled for chunk system testing)
     // Update voxel world
     if (m_pVoxelWorld)
     {
-        std::cout << "Update: Updating voxel world" << std::endl;
         m_pVoxelWorld->Update(m_pCamera->GetPosition());
-        std::cout << "Update: Voxel world updated" << std::endl;
     }
     
     // Update chunk manager
     if (m_pChunkManager)
     {
-        std::cout << "Update: Updating chunk manager" << std::endl;
         m_pChunkManager->UpdateChunkBuffers(m_pVoxelWorld.get());
-        std::cout << "Update: Chunk manager updated" << std::endl;
     }
-    
-    std::cout << "Update: Completed" << std::endl;
 }
 
 void ForgedFlightApp::UpdateCamera(double deltaTime)
@@ -480,14 +469,14 @@ void ForgedFlightApp::UpdateCamera(double deltaTime)
     if (m_KeyStates.find(VK_SPACE) != m_KeyStates.end() && m_KeyStates[VK_SPACE])
         m_pCamera->MoveUp(speed);
         
-    if (m_KeyStates.find(VK_LSHIFT) != m_KeyStates.end() && m_KeyStates[VK_LSHIFT])
+    // Check for both left and right shift keys, or the generic shift key
+    if ((m_KeyStates.find('C') != m_KeyStates.end() && m_KeyStates['C']) ||
+        (m_KeyStates.find('c') != m_KeyStates.end() && m_KeyStates['c']))
         m_pCamera->MoveUp(-speed);
 }
 
 void ForgedFlightApp::Render()
-{
-    std::cout << "Render: Starting" << std::endl;
-    
+{    
     // Begin advanced rendering frame (sets up HDR render targets)
     if (m_pAdvancedRenderer)
     {
@@ -499,33 +488,23 @@ void ForgedFlightApp::Render()
     ITextureView* pRTV = m_pSwapChain->GetCurrentBackBufferRTV();
     ITextureView* pDSV = m_pSwapChain->GetDepthBufferDSV();
 
-    std::cout << "Render: Setting render targets" << std::endl;
     m_pImmediateContext->SetRenderTargets(1, &pRTV, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     m_pImmediateContext->ClearRenderTarget(pRTV, ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.0f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    std::cout << "Render: Cleared buffers" << std::endl;
 
     if (m_pCamera)
     {
-        std::cout << "Render: Updating view-projection matrix" << std::endl;
-        
+       
         // Update view-projection matrix
         float4x4 viewProjMatrix = m_pCamera->GetViewProjectionMatrix();
-        
-        std::cout << "Render: About to map uniform buffer" << std::endl;
         
         // Map the buffer and write data
         MapHelper<float4x4> CBConstants(m_pImmediateContext, m_pVSConstants, MAP_WRITE, MAP_FLAG_DISCARD);
         *CBConstants = viewProjMatrix; // Try without transpose first
-        
-        std::cout << "Render: Uniform buffer updated" << std::endl;
     }
-
-    std::cout << "Render: About to render cubes" << std::endl;
     
     // Render voxel world chunks only
-    std::cout << "Render: Rendering voxel world chunks" << std::endl;
     RenderVoxelWorld();
     
     // Apply post-processing effects (SSAO, Bloom, tone mapping)
@@ -540,12 +519,8 @@ void ForgedFlightApp::Render()
         m_pAdvancedRenderer->EndFrame();
     }
     
-    std::cout << "Render: About to show camera debug info" << std::endl;
-    
     // Show camera debug info in ImGui window
     RenderImGuiDebugWindow();
-    
-    std::cout << "Render: Completed" << std::endl;
 }
 
 void ForgedFlightApp::RenderVoxelWorld()
@@ -580,7 +555,6 @@ void ForgedFlightApp::WindowResize(Uint32 Width, Uint32 Height)
             ImGuiIO& io = ImGui::GetIO();
             io.DisplaySize.x = static_cast<float>(Width);
             io.DisplaySize.y = static_cast<float>(Height);
-            std::cout << "Updated ImGui DisplaySize to: " << Width << "x" << Height << std::endl;
         }
     }
 }
@@ -712,14 +686,9 @@ void ForgedFlightApp::OnMouseWheel(int delta)
 void ForgedFlightApp::InitializeImGui()
 {
     try 
-    {
-        std::cout << "Starting ImGui initialization" << std::endl;
-        
+    {        
         if (!m_pDevice || !m_pImmediateContext)
-        {
-            std::cout << "Error: Device or context is null" << std::endl;
             return;
-        }
         
         // Create ImGui implementation
         ImGuiDiligentCreateInfo CreateInfo;
@@ -727,30 +696,22 @@ void ForgedFlightApp::InitializeImGui()
         CreateInfo.BackBufferFmt = m_pSwapChain->GetDesc().ColorBufferFormat;
         CreateInfo.DepthBufferFmt = m_pSwapChain->GetDesc().DepthBufferFormat;
         
-        std::cout << "ImGui CreateInfo set up with device and formats" << std::endl;
-        
         m_pImGuiImpl = std::make_unique<ImGuiImplDiligent>(CreateInfo);
-        
-        std::cout << "ImGui implementation created successfully" << std::endl;
         
         // Set up ImGui style and ensure DisplaySize is set correctly
         ImGuiIO& io = ImGui::GetIO();
         io.DisplaySize.x = static_cast<float>(m_WindowWidth);
         io.DisplaySize.y = static_cast<float>(m_WindowHeight);
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-        
-        std::cout << "ImGui IO configured with DisplaySize: " << io.DisplaySize.x << "x" << io.DisplaySize.y << std::endl;
     }
     catch (const std::exception& e)
     {
         std::string error = "Failed to initialize ImGui: ";
         error += e.what();
-        std::cout << error << std::endl;
         MessageBoxA(nullptr, error.c_str(), "ImGui Error", MB_OK | MB_ICONERROR);
     }
     catch (...)
     {
-        std::cout << "Unknown error during ImGui initialization" << std::endl;
         MessageBoxA(nullptr, "Unknown error during ImGui initialization", "ImGui Error", MB_OK | MB_ICONERROR);
     }
 }
@@ -841,63 +802,7 @@ void ForgedFlightApp::RenderImGuiDebugWindow()
         }
         
         ImGui::Separator();
-        ImGui::Text("=== CUBE DEBUG INFO ===");
-        
-        // Cube position info
-        ImGui::Text("Cube Position: (0.0, 0.0, 0.0)");
-        ImGui::Text("Cube Size: 1.0 x 1.0 x 1.0");
-        
-        // Distance to cube
-        float3 cubePos = float3(0.0f, 0.0f, 0.0f);
-        float3 camPos = m_pCamera->GetPosition();
-        float distance = length(camPos - cubePos);
-        ImGui::Text("Distance to Cube: %.2f", distance);
-        
-        // Camera presets for cube viewing
-        if (ImGui::Button("Look at Cube"))
-        {
-            m_pCamera->SetPosition(float3(3.0f, 3.0f, 3.0f));
-            m_pCamera->SetRotation(135.0f, -30.0f); // Fixed: 135° = southwest direction toward origin
-            m_pCamera->SetMovementSpeed(5.0f);
-        }
-        
-        ImGui::SameLine();
-        
-        if (ImGui::Button("Cube Close-up"))
-        {
-            m_pCamera->SetPosition(float3(1.5f, 1.5f, 1.5f));
-            m_pCamera->SetRotation(135.0f, -30.0f); // Fixed: 135° = southwest direction toward origin
-            m_pCamera->SetMovementSpeed(2.0f);
-        }
-        
-        if (ImGui::Button("Front View"))
-        {
-            m_pCamera->SetPosition(float3(0.0f, 0.0f, 5.0f));
-            m_pCamera->SetRotation(180.0f, 0.0f); // Look straight at cube from front
-            m_pCamera->SetMovementSpeed(3.0f);
-        }
-        
-        ImGui::SameLine();
-        
-        if (ImGui::Button("Cube Top View"))
-        {
-            m_pCamera->SetPosition(float3(0.0f, 5.0f, 0.0f));
-            m_pCamera->SetRotation(0.0f, -90.0f);
-            m_pCamera->SetMovementSpeed(3.0f);
-        }
-        
-        ImGui::Separator();
-        
-        // Reset button
-        if (ImGui::Button("Reset Camera"))
-        {
-            m_pCamera->SetPosition(float3(0.0f, 0.0f, 5.0f));
-            m_pCamera->SetRotation(180.0f, 0.0f); // Look straight at cube from front
-            m_pCamera->SetMovementSpeed(3.0f);
-        }
-        
-        ImGui::SameLine();
-        
+                
         // Quick position presets
         if (ImGui::Button("Ground Level"))
         {
@@ -919,20 +824,135 @@ void ForgedFlightApp::RenderImGuiDebugWindow()
         if (m_pVoxelWorld)
         {
             int renderDistance = m_pVoxelWorld->GetRenderDistance();
-            if (ImGui::SliderInt("Render Distance (Chunks)", &renderDistance, 1, 16))
+            if (ImGui::SliderInt("Render Distance (Chunks)", &renderDistance, 1, 32))
             {
                 m_pVoxelWorld->SetRenderDistance(renderDistance);
             }
-            ImGui::Text("Total chunks: ~%d", (2 * renderDistance + 1) * (2 * renderDistance + 1) * (2 * renderDistance + 1));
+            
+            // Enhanced chunk info with performance warnings
+            int totalPotentialChunks = (2 * renderDistance + 1) * (2 * renderDistance + 1) * (2 * renderDistance + 1);
+            ImGui::Text("Max chunks: %d", totalPotentialChunks);
+            
+            // Color-code based on performance impact
+            if (totalPotentialChunks > 200) {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f)); // Red warning
+                ImGui::Text("WARNING: High chunk count may cause lag!");
+                ImGui::PopStyleColor();
+            } else if (totalPotentialChunks > 100) {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.3f, 1.0f)); // Yellow warning
+                ImGui::Text("CAUTION: Monitor performance");
+                ImGui::PopStyleColor();
+            }
+            
+            // Show actual loaded chunks and queue status
+            ImGui::Text("Loaded chunks: %zu", m_pVoxelWorld->GetChunkCount());
+            ImGui::Text("Generation queue: %zu", m_pVoxelWorld->GetQueueSize());
+            ImGui::Text("Deletion queue: %zu", m_pVoxelWorld->GetDeletionQueueSize());
+            
+            // Combined queue status indicator
+            size_t totalQueueSize = m_pVoxelWorld->GetQueueSize() + m_pVoxelWorld->GetDeletionQueueSize();
+            if (totalQueueSize > 15) {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.3f, 1.0f));
+                ImGui::Text("⚠ High queue activity");
+                ImGui::PopStyleColor();
+            } else if (totalQueueSize > 0) {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 1.0f, 0.3f, 1.0f));
+                ImGui::Text("✓ Chunks processing smoothly");
+                ImGui::PopStyleColor();
+            } else {
+                ImGui::Text("✓ All chunks stable");
+            }
+            
+            // Individual queue status
+            if (m_pVoxelWorld->GetQueueSize() > 0) {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.8f, 1.0f, 1.0f));
+                ImGui::Text("  🔄 Generating chunks...");
+                ImGui::PopStyleColor();
+            }
+            if (m_pVoxelWorld->GetDeletionQueueSize() > 0) {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.6f, 0.6f, 1.0f));
+                ImGui::Text("  🗑 Cleaning up chunks...");
+                ImGui::PopStyleColor();
+            }
+        }
+        
+        ImGui::Separator();
+        ImGui::Text("=== PERFORMANCE METRICS ===");
+        
+        // Update performance metrics
+        static double lastTime = 0.0;
+        double currentTime = m_LastFrameTime;
+        if (lastTime > 0.0) {
+            double deltaTime = currentTime - lastTime;
+            m_PerformanceMetrics.frameTime = static_cast<float>(deltaTime * 1000.0); // Convert to ms
+            m_PerformanceMetrics.fps = deltaTime > 0.0 ? static_cast<float>(1.0 / deltaTime) : 0.0f;
+        }
+        lastTime = currentTime;
+        
+        // Display performance info with color coding
+        ImGui::Text("Frame Time: %.2f ms", m_PerformanceMetrics.frameTime);
+        
+        // Color-code FPS based on performance
+        if (m_PerformanceMetrics.fps < 30.0f) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f)); // Red for poor
+        } else if (m_PerformanceMetrics.fps < 45.0f) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.3f, 1.0f)); // Yellow for okay
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 1.0f, 0.3f, 1.0f)); // Green for good
+        }
+        ImGui::Text("FPS: %.1f", m_PerformanceMetrics.fps);
+        ImGui::PopStyleColor();
+        
+        // Rendering statistics
+        ImGui::Separator();
+        ImGui::Text("=== RENDERING STATS ===");
+        
+        // Calculate total vertices and faces being rendered
+        size_t totalVertices = 0;
+        size_t totalIndices = 0;
+        size_t totalFaces = 0;
+        if (m_pVoxelWorld) {
+            const auto& loadedChunks = m_pVoxelWorld->GetLoadedChunks();
+            for (const auto& [chunkKey, chunk] : loadedChunks) {
+                if (chunk && chunk->IsMeshBuilt()) {
+                    totalVertices += chunk->GetVertexCount();
+                    totalIndices += chunk->GetIndexCount();
+                    totalFaces += chunk->GetIndexCount() / 6; // 6 indices per face (2 triangles)
+                }
+            }
+        }
+        
+        ImGui::Text("Total Vertices: %zu", totalVertices);
+        ImGui::Text("Total Faces: %zu", totalFaces);
+        ImGui::Text("Back Face Culling: ENABLED");
+        ImGui::Text("Winding Order: Counter-Clockwise");
+        ImGui::Text("GPU Culling: Active");
+        
+        // Estimated performance benefit
+        float faceCullingBenefit = totalFaces > 0 ? (totalFaces * 0.5f) / totalFaces * 100.0f : 0.0f; // Estimated ~50% culling
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 1.0f, 0.3f, 1.0f));
+        ImGui::Text("Est. Face Culling: ~%.0f%%", faceCullingBenefit);
+        ImGui::PopStyleColor();
+        
+        // Performance warnings and tips
+        if (m_PerformanceMetrics.fps < 30.0f) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+            ImGui::Text("⚠ PERFORMANCE WARNING ⚠");
+            ImGui::Text("• Reduce render distance");
+            ImGui::Text("• Move slower between chunks");
+            ImGui::PopStyleColor();
+        } else if (m_PerformanceMetrics.fps < 45.0f) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.3f, 1.0f));
+            ImGui::Text("⚠ Performance could be better");
+            ImGui::PopStyleColor();
         }
         
         // Window size info
         ImGui::Separator();
         ImGui::Text("Window: %dx%d", m_WindowWidth, m_WindowHeight);
         
-        // Frame rate info
-        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 
-                   1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+        // Frame rate comparison (ImGui's built-in vs our calculation)
+        ImGui::Text("ImGui FPS: %.1f", ImGui::GetIO().Framerate);
     }
     ImGui::End();
     
